@@ -394,11 +394,27 @@ export default function App() {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 function DashboardView({ plans, onOpen, onDelete, onNew }) {
+  const toolCards = [
+    { title: "ODL Course Designer", desc: "Design and structure open distance learning courses", url: "https://odl-designer.vercel.app/", color: "var(--teal)" },
+    { title: "Language Lab", desc: "Interactive language learning platform", url: "https://languagelab.braou.ac.in/", color: "var(--marigold)" },
+    { title: "Bodhi Planner", desc: "Bloom's-aligned lesson plans and worksheets", url: "https://moodle.braou.ac.in/bodhiplanner/", color: "var(--terracotta)" },
+  ];
   return (
     <div>
       <div className="plan-header">
         <h1 style={{ fontSize: 26 }}>Your lesson plans</h1>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> New lesson plan</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+        {toolCards.map((card) => (
+          <a key={card.url} href={card.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+            <div className="card" style={{ borderTop: `3px solid ${card.color}`, padding: 18, margin: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)", marginBottom: 6 }}>{card.title}</div>
+              <div style={{ fontSize: 12.5, color: "var(--ink-soft)", lineHeight: 1.5 }}>{card.desc}</div>
+            </div>
+          </a>
+        ))}
       </div>
       {plans.length === 0 ? (
         <div className="empty-state"><p>No lesson plans yet. Start one and it'll show up here.</p></div>
