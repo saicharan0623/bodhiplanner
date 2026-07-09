@@ -335,10 +335,10 @@ export default function App() {
             <div className="login-brand">Bodhi Planner</div>
             <div className="login-tag">Lesson plans, worksheets, and parent updates — built around Bloom's Taxonomy.</div>
             <a href={`${BASE}/auth/login`} className="btn btn-primary" style={{ width: "100%", justifyContent: "center", textDecoration: "none" }}>
-              Sign in with Moodle <ChevronRight size={16} />
+              Sign in with Google <ChevronRight size={16} />
             </a>
             <div className="oauth-note">
-              You'll be redirected to moodle.braou.ac.in to authenticate with your existing Moodle account. No separate registration needed.
+              Sign in with your Google account to access Bodhi Planner. Your lesson plans are saved locally in your browser.
             </div>
           </div>
         </div>

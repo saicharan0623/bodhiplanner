@@ -11,16 +11,20 @@ dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 
 const {
   ANTHROPIC_API_KEY,
-  MOODLE_BASE_URL,
-  MOODLE_CLIENT_ID,
-  MOODLE_CLIENT_SECRET,
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
   SESSION_SECRET,
   PORT = "3001",
   BASE_PATH = "/bodhiplanner",
+  APP_URL = "https://moodle.braou.ac.in",
 } = process.env;
 
 if (!ANTHROPIC_API_KEY) {
   console.error("FATAL: ANTHROPIC_API_KEY is not set in .env");
+  process.exit(1);
+}
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+  console.error("FATAL: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in .env");
   process.exit(1);
 }
 
@@ -73,93 +77,63 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// ─── OAuth 2 routes ────────────────────────────────────────────────────────────
+// ─── OAuth 2 routes (Google) ───────────────────────────────────────────────────
 
-// Step 1: Redirect user to Moodle's authorize endpoint
+const REDIRECT_URI = `${APP_URL}${BASE_PATH}/auth/callback`;
+
+// Step 1: Redirect to Google
 app.get(`${BASE_PATH}/auth/login`, (req, res) => {
-  const redirectUri = `${MOODLE_BASE_URL}${BASE_PATH}/auth/callback`;
-  const authorizeUrl = new URL(`${MOODLE_BASE_URL}/local/oauth/authorize.php`);
-  
-  // Moodle OAuth 2 provider uses /local/oauth or /admin/oauth2 depending on setup
-  // Standard Moodle OAuth 2 uses: /login/oauth2/authorize
-  const authUrl = `${MOODLE_BASE_URL}/admin/oauth2/authorize.php`;
-  
   const params = new URLSearchParams({
-    client_id: MOODLE_CLIENT_ID,
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
     response_type: "code",
-    redirect_uri: redirectUri,
-    scope: "user_info",
+    scope: "openid email profile",
+    access_type: "offline",
     state: req.sessionID,
   });
-
-  res.redirect(`${authUrl}?${params.toString()}`);
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 });
 
-// Step 2: Moodle redirects back with an authorization code
+// Step 2: Google redirects back with code
 app.get(`${BASE_PATH}/auth/callback`, async (req, res) => {
-  const { code, state, error: oauthError } = req.query;
+  const { code, error: oauthError } = req.query;
 
-  if (oauthError) {
+  if (oauthError || !code) {
     return res.redirect(`${BASE_PATH}/?error=oauth_denied`);
   }
 
-  if (!code) {
-    return res.redirect(`${BASE_PATH}/?error=no_code`);
-  }
-
-  // Verify state matches session
-  if (state && state !== req.sessionID) {
-    return res.redirect(`${BASE_PATH}/?error=state_mismatch`);
-  }
-
   try {
-    const redirectUri = `${MOODLE_BASE_URL}${BASE_PATH}/auth/callback`;
-
-    // Exchange code for access token
-    const tokenRes = await fetch(`${MOODLE_BASE_URL}/login/token.php`, {
+    // Exchange code for tokens
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: MOODLE_CLIENT_ID,
-        client_secret: MOODLE_CLIENT_SECRET,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
         code,
-        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+        redirect_uri: REDIRECT_URI,
       }),
     });
 
     const tokenData = await tokenRes.json();
-
     if (tokenData.error) {
-      console.error("Token exchange failed:", tokenData);
+      console.error("Google token error:", tokenData);
       return res.redirect(`${BASE_PATH}/?error=token_failed`);
     }
 
-    const accessToken = tokenData.access_token || tokenData.token;
-
-    // Fetch user info from Moodle
-    const userRes = await fetch(
-      `${MOODLE_BASE_URL}/webservice/rest/server.php?` +
-      new URLSearchParams({
-        wstoken: accessToken,
-        wsfunction: "core_webservice_get_site_info",
-        moodlewsrestformat: "json",
-      })
-    );
-
+    // Get user info
+    const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
     const userData = await userRes.json();
 
-    if (userData.errorcode) {
-      console.error("User info fetch failed:", userData);
-      return res.redirect(`${BASE_PATH}/?error=user_fetch_failed`);
-    }
-
-    // Store user in session
+    // Store in session
     req.session.user = {
-      id: userData.userid,
-      name: userData.fullname || userData.username,
-      username: userData.username,
-      siteUrl: userData.siteurl,
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+      picture: userData.picture,
     };
 
     req.session.save(() => {
