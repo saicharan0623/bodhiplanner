@@ -10,7 +10,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.env") });
 
 const {
-  ANTHROPIC_API_KEY,
+  OPENAI_API_KEY,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
   SESSION_SECRET,
@@ -19,8 +19,8 @@ const {
   APP_URL = "https://moodle.braou.ac.in",
 } = process.env;
 
-if (!ANTHROPIC_API_KEY) {
-  console.error("FATAL: ANTHROPIC_API_KEY is not set in .env");
+if (!OPENAI_API_KEY) {
+  console.error("FATAL: OPENAI_API_KEY is not set in .env");
   process.exit(1);
 }
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -175,36 +175,38 @@ app.post(`${BASE_PATH}/api/claude`, requireAuth, aiLimiter, async (req, res) => 
   }
 
   try {
-    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "gpt-4o-mini",
         max_tokens: Math.min(maxTokens, 2000),
-        system,
-        messages: [{ role: "user", content: userText }],
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userText },
+        ],
       }),
     });
 
-    if (!claudeRes.ok) {
-      const errBody = await claudeRes.text();
-      console.error("Claude API error:", claudeRes.status, errBody);
+    if (!openaiRes.ok) {
+      const errBody = await openaiRes.text();
+      console.error("OpenAI API error:", openaiRes.status, errBody);
       return res.status(502).json({ error: "AI service temporarily unavailable." });
     }
 
-    const data = await claudeRes.json();
-    const text = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
+    const data = await openaiRes.json();
+    const text = data.choices?.[0]?.message?.content || "";
+
+    if (!text) {
+      return res.status(502).json({ error: "No response from AI." });
+    }
 
     res.json({ text });
   } catch (err) {
-    console.error("Claude proxy error:", err);
+    console.error("OpenAI proxy error:", err);
     res.status(500).json({ error: "Internal server error." });
   }
 });
