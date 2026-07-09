@@ -231,5 +231,5 @@ app.get(BASE_PATH, (req, res) => {
 app.listen(parseInt(PORT), "0.0.0.0", () => {
   console.log(`✅ Bodhi Planner server running on port ${PORT}`);
   console.log(`   Base path: ${BASE_PATH}`);
-  console.log(`   Moodle: ${MOODLE_BASE_URL}`);
+  console.log(`   App URL: ${APP_URL}`);
 });
